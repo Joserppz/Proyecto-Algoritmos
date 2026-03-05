@@ -241,6 +241,8 @@
             class="pizarra"
             @click="handlePizarraClick"
             @mousemove="handleMouseMove"
+            @mouseup="detenerArrastre"
+            @mouseleave="detenerArrastre"
           >
             <svg class="conexiones-svg">
               <defs>
@@ -382,10 +384,13 @@
               :key="index"
               class="nodo"
               :style="{ left: nodo.x + 'px', top: nodo.y + 'px', background: nodo.color, borderColor: nodo.color }"
+              @mousedown.prevent.stop="iniciarArrastre(nodo, $event)"
               @click.stop="handleNodoClick(nodo, $event)"
+              @mouseup="detenerArrastre"
               :class="{ 
                 seleccionado: nodoSeleccionado === nodo,
-                destino: modo === 'conexion' && nodoSeleccionado && nodoSeleccionado !== nodo
+                destino: modo === 'conexion' && nodoSeleccionado && nodoSeleccionado !== nodo,
+                arrastrando: nodoArrastrado === nodo
               }"
             >
               <div class="nodo-contenido">
@@ -553,6 +558,11 @@ const inputPeso = ref(null)
 const mostrarModalExportar = ref(false)
 const nombreArchivo = ref('')
 const inputExportar = ref(null)
+
+// --- VARIABLES PARA EL ARRASTRE (DRAG & DROP) ---
+const nodoArrastrado = ref(null)
+const isDragging = ref(false)
+const dragOffset = ref({ x: 0, y: 0 })
 
 let nextId = 1
 
@@ -790,7 +800,62 @@ const crearNodo = (x, y) => {
   })
 }
 
+// ---- LOGICA DE ARRASTRE Y CLIC ----
+
+const iniciarArrastre = (nodo, event) => {
+  nodoArrastrado.value = nodo
+  isDragging.value = false // Aún no sabemos si arrastra o solo hizo clic
+  const rect = pizarra.value.getBoundingClientRect()
+  
+  dragOffset.value = {
+    x: (event.clientX - rect.left) - nodo.x,
+    y: (event.clientY - rect.top) - nodo.y
+  }
+}
+
+const detenerArrastre = () => {
+  if (nodoArrastrado.value) {
+    nodoArrastrado.value = null
+    // Pequeño retraso para que el evento click que le sigue pueda leer que SI hubo arrastre y se cancele
+    setTimeout(() => {
+      isDragging.value = false
+    }, 50)
+  }
+}
+
+const handleMouseMove = (event) => {
+  const rect = event.currentTarget.getBoundingClientRect()
+  
+  // Siempre actualizamos la posición del mouse para la línea temporal de conexiones
+  if (modo.value === 'conexion' && nodoSeleccionado.value) {
+    mousePos.value = {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top
+    }
+  }
+
+  // Si hay un nodo seleccionado y se está moviendo el mouse, entonces es Drag & Drop
+  if (nodoArrastrado.value) {
+    isDragging.value = true
+    
+    let nuevoX = (event.clientX - rect.left) - dragOffset.value.x
+    let nuevoY = (event.clientY - rect.top) - dragOffset.value.y
+    
+    // Mantenemos el nodo dentro de los límites de la pizarra (considerando el radio de 24px)
+    if(nuevoX < 24) nuevoX = 24
+    if(nuevoX > rect.width - 24) nuevoX = rect.width - 24
+    if(nuevoY < 24) nuevoY = 24
+    if(nuevoY > rect.height - 24) nuevoY = rect.height - 24
+
+    nodoArrastrado.value.x = nuevoX
+    nodoArrastrado.value.y = nuevoY
+  } 
+}
+
 const handlePizarraClick = (event) => {
+  // Evitamos crear un nodo si el usuario acaba de soltar un nodo arrastrado
+  if (isDragging.value) return; 
+
   if (modo.value === 'nodo') {
     const rect = event.currentTarget.getBoundingClientRect()
     const x = event.clientX - rect.left
@@ -801,6 +866,9 @@ const handlePizarraClick = (event) => {
 
 const handleNodoClick = (nodo, event) => {
   event.stopPropagation()
+  
+  // Si soltamos el nodo tras arrastrarlo, no queremos que se active la conexión
+  if (isDragging.value) return;
   
   if (modo.value === 'conexion') {
     if (!nodoSeleccionado.value) {
@@ -821,6 +889,8 @@ const handleNodoClick = (nodo, event) => {
     }
   }
 }
+
+// ------------------------------------
 
 const confirmarPeso = () => {
   if (pesoTemporal.value >= 1 && pesoTemporal.value <= 10) {
@@ -877,16 +947,6 @@ const crearConexion = (origen, destino, peso) => {
     color: getTipoConexionColor.value,
     tipo: tipoConexion.value
   })
-}
-
-const handleMouseMove = (event) => {
-  if (modo.value === 'conexion' && nodoSeleccionado.value) {
-    const rect = event.currentTarget.getBoundingClientRect()
-    mousePos.value = {
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top
-    }
-  }
 }
 
 const actualizarConexion = (index) => {
@@ -1616,17 +1676,27 @@ onMounted(() => {})
   color: white;
   font-weight: 600;
   font-size: 0.9rem;
-  cursor: pointer;
+  cursor: grab; /* Cambiado a grab para indicar que se puede mover */
   transform: translate(-50%, -50%);
-  transition: all 0.2s ease;
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s; /* Eliminé scale y transform del transition para que el drag sea fluido */
   box-shadow: 0 4px 8px rgba(0,0,0,0.05);
   z-index: 10;
 }
 
-.nodo:hover {
-  transform: translate(-50%, -50%) scale(1.1);
-  box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+/* Efecto cuando lo agarras */
+.nodo:active {
+  cursor: grabbing;
+}
+
+/* Efecto cuando lo estás moviendo o pasando por encima */
+.nodo:hover, .nodo.arrastrando {
+  box-shadow: 0 8px 16px rgba(0,0,0,0.15);
   filter: brightness(1.1);
+}
+
+.nodo.arrastrando {
+  z-index: 100; /* Asegura que el nodo que se mueve quede por encima de todo */
+  transform: translate(-50%, -50%) scale(1.1);
 }
 
 .nodo.seleccionado {
