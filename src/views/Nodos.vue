@@ -74,7 +74,7 @@
         <div class="panel-group">
           <span class="panel-label">ACCIONES</span>
           <div class="button-group">
-            <button @click="exportarDiseño" class="btn-action btn-export">
+            <button @click="abrirModalExportar" class="btn-action btn-export">
               ⭳ EXPORTAR
             </button>
             <button @click="importarDiseño" class="btn-action btn-import">
@@ -214,6 +214,26 @@
                 </div>
               </div>
             </div>
+
+            <div v-if="mostrarModalExportar" class="modal-peso-overlay" @click="cancelarExportacion">
+              <div class="modal-peso-content" @click.stop>
+                <h3>GUARDAR DISEÑO</h3>
+                <p>Ingresa un nombre para tu archivo</p>
+                <input 
+                  type="text" 
+                  ref="inputExportar"
+                  v-model="nombreArchivo" 
+                  class="modal-input"
+                  placeholder="Ej: mi_grafo_1"
+                  @keyup.enter="confirmarExportacion"
+                />
+                <div class="modal-buttons">
+                  <button @click="cancelarExportacion" class="modal-btn cancelar">CANCELAR</button>
+                  <button @click="confirmarExportacion" class="modal-btn confirmar">GUARDAR</button>
+                </div>
+              </div>
+            </div>
+            
           </div>
           
           <div 
@@ -516,7 +536,6 @@
 <script setup>
 import { ref, onMounted, computed, nextTick } from 'vue'
 
-// Estado
 const nodos = ref([])
 const conexiones = ref([])
 const modo = ref('nodo')
@@ -530,15 +549,18 @@ const pesoTemporal = ref(3)
 const conexionPendiente = ref(null)
 const inputPeso = ref(null)
 
+// Variables para el modal de exportar
+const mostrarModalExportar = ref(false)
+const nombreArchivo = ref('')
+const inputExportar = ref(null)
+
 let nextId = 1
 
-// Colores
 const coloresNodo = [
   '#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6', 
   '#1abc9c', '#e67e22', '#34495e', '#16a085', '#c0392b'
 ]
 
-// NUEVA FUNCIÓN: Calcular punto en el borde del nodo para la línea temporal
 const calcularPuntoEnBorde = (nodo, mousePos) => {
   const dx = mousePos.x - nodo.x
   const dy = mousePos.y - nodo.y
@@ -546,14 +568,13 @@ const calcularPuntoEnBorde = (nodo, mousePos) => {
   
   if (distancia === 0) return { x: nodo.x, y: nodo.y }
   
-  const radio = 24 // Mismo radio que el nodo
+  const radio = 24 
   return {
     x: nodo.x + (dx / distancia) * radio,
     y: nodo.y + (dy / distancia) * radio
   }
 }
 
-// MEJORADA: Calcular path normal con puntos en el BORDE del nodo
 const calcularPathNormal = (origen, destino) => {
   const dx = destino.x - origen.x
   const dy = destino.y - origen.y
@@ -564,24 +585,20 @@ const calcularPathNormal = (origen, destino) => {
   const radio = 24
   const angulo = Math.atan2(dy, dx)
   
-  // Punto de inicio en el BORDE del nodo origen
   const inicioX = origen.x + Math.cos(angulo) * radio
   const inicioY = origen.y + Math.sin(angulo) * radio
   
-  // Punto de fin en el BORDE del nodo destino
   const finX = destino.x - Math.cos(angulo) * radio
   const finY = destino.y - Math.sin(angulo) * radio
   
   return `M ${inicioX} ${inicioY} L ${finX} ${finY}`
 }
 
-// MEJORADA: Path de ciclo (Bucle) más abierto y que conecta exactamente al borde
 const calcularPathCiclo = (nodo) => {
   const x = nodo.x
   const y = nodo.y
   const radio = 24
   
-  // Ángulos exactos para salir y entrar por el borde superior (135 y 45 grados)
   const anguloInicio = -Math.PI * 0.75
   const anguloFin = -Math.PI * 0.25
   
@@ -591,7 +608,6 @@ const calcularPathCiclo = (nodo) => {
   const endX = x + Math.cos(anguloFin) * radio
   const endY = y + Math.sin(anguloFin) * radio
   
-  // Puntos de control para que se abra bien como una gota
   const cp1X = x - 50
   const cp1Y = y - 80
   const cp2X = x + 50
@@ -600,7 +616,6 @@ const calcularPathCiclo = (nodo) => {
   return `M ${startX} ${startY} C ${cp1X} ${cp1Y}, ${cp2X} ${cp2Y}, ${endX} ${endY}`
 }
 
-// MEJORADA: Path paralelo con líneas rectas exactas
 const calcularPathParalelo = (origen, destino, offset, direccion) => {
   const dx = destino.x - origen.x
   const dy = destino.y - origen.y
@@ -615,13 +630,11 @@ const calcularPathParalelo = (origen, destino, offset, direccion) => {
     const perpY = dx / distancia
     const angulo = Math.atan2(dy, dx)
     
-    // Calculamos el punto exacto en el borde
     const bordeX1 = origen.x + Math.cos(angulo) * radio
     const bordeY1 = origen.y + Math.sin(angulo) * radio
     const bordeX2 = destino.x - Math.cos(angulo) * radio
     const bordeY2 = destino.y - Math.sin(angulo) * radio
     
-    // Le sumamos el offset perpendicular
     const inicioX = bordeX1 + perpX * offset
     const inicioY = bordeY1 + perpY * offset
     const finX = bordeX2 + perpX * offset
@@ -629,7 +642,6 @@ const calcularPathParalelo = (origen, destino, offset, direccion) => {
     
     return `M ${inicioX} ${inicioY} L ${finX} ${finY}`
   } else {
-    // Para la vuelta, se calcula invirtiendo origen y destino para que la flecha quede bien
     const dxInv = origen.x - destino.x
     const dyInv = origen.y - destino.y
     const perpXInv = -dyInv / distancia
@@ -650,7 +662,6 @@ const calcularPathParalelo = (origen, destino, offset, direccion) => {
   }
 }
 
-// MEJORADA: Punto medio paralelo exacto
 const calcularPuntoMedioParalelo = (origen, destino, offset) => {
   const midX = (origen.x + destino.x) / 2
   const midY = (origen.y + destino.y) / 2
@@ -670,7 +681,6 @@ const calcularPuntoMedioParalelo = (origen, destino, offset) => {
   }
 }
 
-// Computed para color del tipo de conexión
 const getTipoConexionColor = computed(() => {
   switch(tipoConexion.value) {
     case 'dirigida': return '#3498db'
@@ -682,7 +692,6 @@ const getTipoConexionColor = computed(() => {
   }
 })
 
-// Computed para nombre del tipo
 const getTipoConexionNombre = computed(() => {
   switch(tipoConexion.value) {
     case 'dirigida': return 'Dirigida'
@@ -694,7 +703,6 @@ const getTipoConexionNombre = computed(() => {
   }
 })
 
-// Calcular convergencias
 const calcularConvergencias = computed(() => {
   let convergencias = 0
   const n = nodos.value.length
@@ -715,7 +723,6 @@ const calcularConvergencias = computed(() => {
   return convergencias / 2
 })
 
-// Matriz de adyacencia
 const matrizAdyacencia = computed(() => {
   const n = nodos.value.length
   const matriz = Array(n).fill().map(() => Array(n).fill(0))
@@ -736,14 +743,12 @@ const matrizAdyacencia = computed(() => {
   return matriz
 })
 
-// Suma de filas
 const sumaFilas = computed(() => {
   return matrizAdyacencia.value.map(fila => 
     fila.reduce((sum, val) => sum + val, 0)
   )
 })
 
-// Suma de columnas
 const sumaColumnas = computed(() => {
   if (nodos.value.length === 0) return []
   const n = nodos.value.length
@@ -752,19 +757,16 @@ const sumaColumnas = computed(() => {
   )
 })
 
-// Suma total
 const sumaTotal = computed(() => {
   return sumaFilas.value.reduce((sum, val) => sum + val, 0)
 })
 
 const sumaTotalPesos = computed(() => sumaTotal.value)
 
-// Contar conexiones por nodo
 const contarConexionesPorNodo = (indiceNodo) => {
   return matrizAdyacencia.value[indiceNodo].filter(valor => valor > 0).length
 }
 
-// Total de conexiones
 const totalConexiones = computed(() => {
   let total = 0
   for (let i = 0; i < nodos.value.length; i++) {
@@ -773,12 +775,10 @@ const totalConexiones = computed(() => {
   return total
 })
 
-// Obtener nombre del nodo
 const obtenerNombreNodo = (nodo) => {
   return nodo.nombre || `N${nodo.id}`
 }
 
-// Crear nodo
 const crearNodo = (x, y) => {
   const colorIndex = (nextId - 1) % coloresNodo.length
   nodos.value.push({
@@ -790,7 +790,6 @@ const crearNodo = (x, y) => {
   })
 }
 
-// Manejar clic en pizarra
 const handlePizarraClick = (event) => {
   if (modo.value === 'nodo') {
     const rect = event.currentTarget.getBoundingClientRect()
@@ -800,7 +799,6 @@ const handlePizarraClick = (event) => {
   }
 }
 
-// Manejar clic en nodo
 const handleNodoClick = (nodo, event) => {
   event.stopPropagation()
   
@@ -808,7 +806,6 @@ const handleNodoClick = (nodo, event) => {
     if (!nodoSeleccionado.value) {
       nodoSeleccionado.value = nodo
     } else {
-      // Guardar la conexión pendiente y mostrar modal
       conexionPendiente.value = {
         origen: nodoSeleccionado.value,
         destino: nodo
@@ -816,7 +813,6 @@ const handleNodoClick = (nodo, event) => {
       pesoTemporal.value = 3
       mostrarModalPeso.value = true
       
-      // Enfocar el input después de que se renderice el modal
       nextTick(() => {
         if (inputPeso.value) {
           inputPeso.value.focus()
@@ -826,7 +822,6 @@ const handleNodoClick = (nodo, event) => {
   }
 }
 
-// Confirmar peso
 const confirmarPeso = () => {
   if (pesoTemporal.value >= 1 && pesoTemporal.value <= 10) {
     if (conexionPendiente.value) {
@@ -842,12 +837,10 @@ const confirmarPeso = () => {
   }
 }
 
-// Cancelar peso
 const cancelarPeso = () => {
   cerrarModal()
 }
 
-// Cerrar modal y limpiar estado
 const cerrarModal = () => {
   mostrarModalPeso.value = false
   conexionPendiente.value = null
@@ -855,9 +848,7 @@ const cerrarModal = () => {
   pesoTemporal.value = 3
 }
 
-// Crear conexión
 const crearConexion = (origen, destino, peso) => {
-  // Verificar si ya existe
   const existeSimilar = conexiones.value.some(c => 
     c.origen.id === origen.id && c.destino.id === destino.id
   )
@@ -867,7 +858,6 @@ const crearConexion = (origen, destino, peso) => {
     return
   }
   
-  // Verificar para no dirigidas
   if (tipoConexion.value === 'no-dirigida' || tipoConexion.value === 'segmentada-no-dirigida') {
     const existeEnAmbas = conexiones.value.some(c => 
       (c.origen.id === origen.id && c.destino.id === destino.id) ||
@@ -880,7 +870,6 @@ const crearConexion = (origen, destino, peso) => {
     }
   }
   
-  // Crear la conexión
   conexiones.value.push({
     origen,
     destino,
@@ -890,7 +879,6 @@ const crearConexion = (origen, destino, peso) => {
   })
 }
 
-// Manejar movimiento del mouse
 const handleMouseMove = (event) => {
   if (modo.value === 'conexion' && nodoSeleccionado.value) {
     const rect = event.currentTarget.getBoundingClientRect()
@@ -901,17 +889,14 @@ const handleMouseMove = (event) => {
   }
 }
 
-// Actualizar conexión
 const actualizarConexion = (index) => {
   conexiones.value = [...conexiones.value]
 }
 
-// Eliminar conexión
 const eliminarConexion = (index) => {
   conexiones.value.splice(index, 1)
 }
 
-// Eliminar nodo
 const eliminarNodo = (index) => {
   const nodoEliminado = nodos.value[index]
   
@@ -926,12 +911,10 @@ const eliminarNodo = (index) => {
   }
 }
 
-// Actualizar nodo
 const actualizarNodo = () => {
   nodos.value = [...nodos.value]
 }
 
-// Limpiar pizarra
 const limpiarPizarra = () => {
   if (confirm('¿ESTÁS SEGURO?')) {
     nodos.value = []
@@ -941,8 +924,28 @@ const limpiarPizarra = () => {
   }
 }
 
-// Exportar diseño
-const exportarDiseño = () => {
+// ---- LOGICA DE EXPORTACIÓN ----
+const abrirModalExportar = () => {
+  nombreArchivo.value = `diseño-${new Date().toISOString().slice(0,10)}`
+  mostrarModalExportar.value = true
+  
+  nextTick(() => {
+    if (inputExportar.value) {
+      inputExportar.value.select()
+    }
+  })
+}
+
+const cancelarExportacion = () => {
+  mostrarModalExportar.value = false
+}
+
+const confirmarExportacion = () => {
+  if (!nombreArchivo.value.trim()) {
+    alert('Por favor, ingresa un nombre válido para el archivo.')
+    return
+  }
+
   const diseño = {
     nodos: nodos.value,
     conexiones: conexiones.value.map(c => ({
@@ -957,20 +960,25 @@ const exportarDiseño = () => {
   
   const dataStr = JSON.stringify(diseño, null, 2)
   const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr)
-  const fileName = `diseño-${new Date().toISOString().slice(0,10)}.json`
+  
+  let finalName = nombreArchivo.value.trim()
+  if (!finalName.endsWith('.json')) {
+    finalName += '.json'
+  }
   
   const link = document.createElement('a')
   link.href = dataUri
-  link.download = fileName
+  link.download = finalName
   link.click()
+
+  mostrarModalExportar.value = false
 }
 
-// Importar diseño
+// ---- LOGICA DE IMPORTACIÓN ----
 const importarDiseño = () => {
   fileInput.value.click()
 }
 
-// Manejar importación
 const handleFileImport = (event) => {
   const file = event.target.files[0]
   if (!file) return
@@ -982,7 +990,6 @@ const handleFileImport = (event) => {
       
       nodos.value = diseño.nodos
       
-      // Restaurar referencias
       conexiones.value = diseño.conexiones.map(c => {
         const origen = nodos.value.find(n => n.id === c.origenId)
         const destino = nodos.value.find(n => n.id === c.destinoId)
