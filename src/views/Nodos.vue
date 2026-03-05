@@ -138,10 +138,10 @@
                   </th>
                   <td v-for="(valor, j) in fila" :key="'celda-'+i+'-'+j" 
                       :class="{ 
-                        'celda-con-valor': valor > 0,
-                        'celda-convergencia': i !== j && matrizAdyacencia[j] && matrizAdyacencia[j][i] > 0 && valor > 0
+                        'celda-con-valor': valor !== 0,
+                        'celda-convergencia': i !== j && matrizAdyacencia[j] && matrizAdyacencia[j][i] !== 0 && valor !== 0
                       }">
-                    <span class="celda-valor">{{ valor || '' }}</span>
+                    <span class="celda-valor">{{ valor !== 0 ? valor : '' }}</span>
                   </td>
                   <td class="sum-celda">{{ sumaFilas[i] }}</td>
                   <td class="count-celda">{{ contarConexionesPorNodo(i) }}</td>
@@ -201,13 +201,11 @@
             <div v-if="mostrarModalPeso" class="modal-peso-overlay" @click="cancelarPeso">
               <div class="modal-peso-content" @click.stop>
                 <h3>INGRESAR PESO</h3>
-                <p>Define el peso de la conexión (1-10)</p>
+                <p>Define el peso de la conexión</p>
                 <input 
                   type="number" 
                   ref="inputPeso"
                   v-model.number="pesoTemporal" 
-                  min="1" 
-                  max="10"
                   class="modal-input"
                   @keyup.enter="confirmarPeso"
                 />
@@ -456,8 +454,6 @@
                   <input 
                     type="number" 
                     v-model.number="conexion.weight" 
-                    min="1" 
-                    max="10"
                     class="input-peso"
                     @change="actualizarConexion(index)"
                   />
@@ -741,8 +737,8 @@ const calcularConvergencias = computed(() => {
   for (let i = 0; i < n; i++) {
     for (let j = 0; j < n; j++) {
       if (i !== j) {
-        const hayIda = matrizAdyacencia.value[i]?.[j] > 0
-        const hayVuelta = matrizAdyacencia.value[j]?.[i] > 0
+        const hayIda = matrizAdyacencia.value[i]?.[j] !== 0
+        const hayVuelta = matrizAdyacencia.value[j]?.[i] !== 0
         
         if (hayIda && hayVuelta) {
           convergencias++
@@ -795,7 +791,7 @@ const sumaTotal = computed(() => {
 const sumaTotalPesos = computed(() => sumaTotal.value)
 
 const contarConexionesPorNodo = (indiceNodo) => {
-  return matrizAdyacencia.value[indiceNodo].filter(valor => valor > 0).length
+  return matrizAdyacencia.value[indiceNodo].filter(valor => valor !== 0).length
 }
 
 const totalConexiones = computed(() => {
@@ -908,7 +904,7 @@ const handleNodoClick = (nodo, event) => {
 // ------------------------------------
 
 const confirmarPeso = () => {
-  if (pesoTemporal.value >= 1 && pesoTemporal.value <= 10) {
+  if (pesoTemporal.value !== null && pesoTemporal.value !== '') {
     if (conexionPendiente.value) {
       crearConexion(
         conexionPendiente.value.origen, 
@@ -918,7 +914,7 @@ const confirmarPeso = () => {
     }
     cerrarModal()
   } else {
-    alert('El peso debe estar entre 1 y 10')
+    alert('Por favor, ingresa un peso válido')
   }
 }
 
@@ -1270,7 +1266,6 @@ onMounted(() => {})
   color: white;
 }
 
-/* Nuevo estilo para el botón Guía */
 .btn-info {
   color: #8e44ad;
   border-color: #d2b4de;
@@ -1608,7 +1603,6 @@ onMounted(() => {})
   margin: 0 0 16px 0;
 }
 
-/* Nuevos estilos para la Guía */
 .modal-guia-content {
   min-width: 450px;
   max-width: 90vw;
