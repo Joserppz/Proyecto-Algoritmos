@@ -83,6 +83,9 @@
             <button @click="limpiarPizarra" class="btn-action btn-danger">
               ⊘ BORRAR TODO
             </button>
+            <button @click="abrirGuia" class="btn-action btn-info">
+              ❔ GUÍA
+            </button>
           </div>
         </div>
 
@@ -230,6 +233,22 @@
                 <div class="modal-buttons">
                   <button @click="cancelarExportacion" class="modal-btn cancelar">CANCELAR</button>
                   <button @click="confirmarExportacion" class="modal-btn confirmar">GUARDAR</button>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="mostrarModalGuia" class="modal-peso-overlay" @click="cerrarGuia">
+              <div class="modal-peso-content modal-guia-content" @click.stop>
+                <h3>GUÍA RÁPIDA</h3>
+                <div class="guia-pasos">
+                  <p><strong>1. Crear Nodos:</strong> Selecciona el modo <b>+ NODO</b> y haz clic en cualquier parte de la pizarra para crearlos.</p>
+                  <p><strong>2. Mover Nodos:</strong> Haz clic, mantén presionado y arrastra cualquier nodo para organizarlo libremente.</p>
+                  <p><strong>3. Conectar:</strong> Cambia al modo <b>⇢ CONEXIÓN</b>, elige el tipo de línea arriba, haz clic en el nodo origen y luego en el nodo destino. Se te pedirá ingresar el peso.</p>
+                  <p><strong>4. Edición:</strong> Usa las tablas de abajo para cambiar nombres, colores, pesos o borrar conexiones específicas.</p>
+                  <p><strong>5. Exportar/Importar:</strong> Puedes guardar tu grafo en tu computadora y volverlo a cargar después sin perder nada.</p>
+                </div>
+                <div class="modal-buttons mt-4">
+                  <button @click="cerrarGuia" class="modal-btn confirmar">¡ENTENDIDO!</button>
                 </div>
               </div>
             </div>
@@ -554,10 +573,12 @@ const pesoTemporal = ref(3)
 const conexionPendiente = ref(null)
 const inputPeso = ref(null)
 
-// Variables para el modal de exportar
+// Variables para modales extra
 const mostrarModalExportar = ref(false)
 const nombreArchivo = ref('')
 const inputExportar = ref(null)
+
+const mostrarModalGuia = ref(false)
 
 // --- VARIABLES PARA EL ARRASTRE (DRAG & DROP) ---
 const nodoArrastrado = ref(null)
@@ -804,7 +825,7 @@ const crearNodo = (x, y) => {
 
 const iniciarArrastre = (nodo, event) => {
   nodoArrastrado.value = nodo
-  isDragging.value = false // Aún no sabemos si arrastra o solo hizo clic
+  isDragging.value = false 
   const rect = pizarra.value.getBoundingClientRect()
   
   dragOffset.value = {
@@ -816,7 +837,6 @@ const iniciarArrastre = (nodo, event) => {
 const detenerArrastre = () => {
   if (nodoArrastrado.value) {
     nodoArrastrado.value = null
-    // Pequeño retraso para que el evento click que le sigue pueda leer que SI hubo arrastre y se cancele
     setTimeout(() => {
       isDragging.value = false
     }, 50)
@@ -826,7 +846,6 @@ const detenerArrastre = () => {
 const handleMouseMove = (event) => {
   const rect = event.currentTarget.getBoundingClientRect()
   
-  // Siempre actualizamos la posición del mouse para la línea temporal de conexiones
   if (modo.value === 'conexion' && nodoSeleccionado.value) {
     mousePos.value = {
       x: event.clientX - rect.left,
@@ -834,14 +853,12 @@ const handleMouseMove = (event) => {
     }
   }
 
-  // Si hay un nodo seleccionado y se está moviendo el mouse, entonces es Drag & Drop
   if (nodoArrastrado.value) {
     isDragging.value = true
     
     let nuevoX = (event.clientX - rect.left) - dragOffset.value.x
     let nuevoY = (event.clientY - rect.top) - dragOffset.value.y
     
-    // Mantenemos el nodo dentro de los límites de la pizarra (considerando el radio de 24px)
     if(nuevoX < 24) nuevoX = 24
     if(nuevoX > rect.width - 24) nuevoX = rect.width - 24
     if(nuevoY < 24) nuevoY = 24
@@ -853,7 +870,6 @@ const handleMouseMove = (event) => {
 }
 
 const handlePizarraClick = (event) => {
-  // Evitamos crear un nodo si el usuario acaba de soltar un nodo arrastrado
   if (isDragging.value) return; 
 
   if (modo.value === 'nodo') {
@@ -867,7 +883,6 @@ const handlePizarraClick = (event) => {
 const handleNodoClick = (nodo, event) => {
   event.stopPropagation()
   
-  // Si soltamos el nodo tras arrastrarlo, no queremos que se active la conexión
   if (isDragging.value) return;
   
   if (modo.value === 'conexion') {
@@ -1073,6 +1088,15 @@ const handleFileImport = (event) => {
   event.target.value = ''
 }
 
+// ---- LÓGICA DE LA GUÍA ----
+const abrirGuia = () => {
+  mostrarModalGuia.value = true
+}
+
+const cerrarGuia = () => {
+  mostrarModalGuia.value = false
+}
+
 onMounted(() => {})
 </script>
 
@@ -1243,6 +1267,18 @@ onMounted(() => {})
 .btn-danger:hover {
   background: #c0392b;
   border-color: #c0392b;
+  color: white;
+}
+
+/* Nuevo estilo para el botón Guía */
+.btn-info {
+  color: #8e44ad;
+  border-color: #d2b4de;
+}
+
+.btn-info:hover {
+  background: #8e44ad;
+  border-color: #8e44ad;
   color: white;
 }
 
@@ -1572,6 +1608,39 @@ onMounted(() => {})
   margin: 0 0 16px 0;
 }
 
+/* Nuevos estilos para la Guía */
+.modal-guia-content {
+  min-width: 450px;
+  max-width: 90vw;
+  text-align: left;
+}
+
+.modal-guia-content h3 {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.guia-pasos {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.guia-pasos p {
+  color: #34495e;
+  font-size: 0.95rem;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.guia-pasos b {
+  color: #2c3e50;
+}
+
+.mt-4 {
+  margin-top: 20px;
+}
+
 .modal-input {
   width: 100%;
   padding: 12px;
@@ -1676,26 +1745,24 @@ onMounted(() => {})
   color: white;
   font-weight: 600;
   font-size: 0.9rem;
-  cursor: grab; /* Cambiado a grab para indicar que se puede mover */
+  cursor: grab;
   transform: translate(-50%, -50%);
-  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s; /* Eliminé scale y transform del transition para que el drag sea fluido */
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
   box-shadow: 0 4px 8px rgba(0,0,0,0.05);
   z-index: 10;
 }
 
-/* Efecto cuando lo agarras */
 .nodo:active {
   cursor: grabbing;
 }
 
-/* Efecto cuando lo estás moviendo o pasando por encima */
 .nodo:hover, .nodo.arrastrando {
   box-shadow: 0 8px 16px rgba(0,0,0,0.15);
   filter: brightness(1.1);
 }
 
 .nodo.arrastrando {
-  z-index: 100; /* Asegura que el nodo que se mueve quede por encima de todo */
+  z-index: 100;
   transform: translate(-50%, -50%) scale(1.1);
 }
 
@@ -2021,6 +2088,10 @@ footer p {
   .modal-peso-content {
     min-width: 260px;
     padding: 20px;
+  }
+  
+  .modal-guia-content {
+    min-width: 280px;
   }
 }
 </style>
