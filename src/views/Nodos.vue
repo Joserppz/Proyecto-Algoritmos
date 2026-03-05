@@ -1,7 +1,6 @@
 <template>
   <div class="nodos-container">
 
-    <!-- NAVBAR SIMÉTRICA (SIN CAMBIOS) -->
     <nav class="navbar">
       <div class="nav-content">
         <div class="logo">
@@ -17,7 +16,6 @@
     </nav>
 
     <main class="nodos-main">
-      <!-- PANEL DE CONTROL - REDISEÑADO -->
       <div class="control-panel">
         <div class="panel-group">
           <span class="panel-label">MODO</span>
@@ -38,8 +36,50 @@
         </div>
 
         <div class="panel-group">
+          <span class="panel-label">TIPO CONEXIÓN</span>
+          <div class="button-group">
+            <button 
+              @click="tipoConexion = 'dirigida'" 
+              :class="{ active: tipoConexion === 'dirigida' }"
+              class="btn-mode btn-tipo">
+              ⇢ DIRIGIDA
+            </button>
+            <button 
+              @click="tipoConexion = 'no-dirigida'" 
+              :class="{ active: tipoConexion === 'no-dirigida' }"
+              class="btn-mode btn-tipo">
+              ⇔ NO DIRIGIDA
+            </button>
+            <button 
+              @click="tipoConexion = 'bidireccional-paralela'" 
+              :class="{ active: tipoConexion === 'bidireccional-paralela' }"
+              class="btn-mode btn-tipo">
+              ⤨ BIDIRECCIONAL
+            </button>
+            <button 
+              @click="tipoConexion = 'segmentada'" 
+              :class="{ active: tipoConexion === 'segmentada' }"
+              class="btn-mode btn-tipo">
+              ┄ SEGMENTADA
+            </button>
+            <button 
+              @click="tipoConexion = 'segmentada-no-dirigida'" 
+              :class="{ active: tipoConexion === 'segmentada-no-dirigida' }"
+              class="btn-mode btn-tipo">
+              ⇢ SEGMENTADA SIN DIRECCION
+            </button>
+          </div>
+        </div>
+
+        <div class="panel-group">
           <span class="panel-label">ACCIONES</span>
           <div class="button-group">
+            <button @click="exportarDiseño" class="btn-action btn-export">
+              ⭳ EXPORTAR
+            </button>
+            <button @click="importarDiseño" class="btn-action btn-import">
+              ⭱ IMPORTAR
+            </button>
             <button @click="limpiarPizarra" class="btn-action btn-danger">
               ⊘ BORRAR TODO
             </button>
@@ -56,12 +96,15 @@
             <span class="stat-value">{{ conexiones.length }}</span>
             <span class="stat-label">conexiones</span>
           </div>
+          <div class="stat-divider"></div>
+          <div class="stat-item">
+            <span class="stat-value">{{ calcularConvergencias }}</span>
+            <span class="stat-label">convergencias</span>
+          </div>
         </div>
       </div>
 
-      <!-- CONTENEDOR PRINCIPAL CON MATRIZ Y PIZARRA - NUEVO DISEÑO -->
       <div class="contenedor-principal">
-        <!-- MATRIZ DE ADYACENCIA - NUEVO DISEÑO -->
         <div class="matriz-container" v-if="nodos.length > 0">
           <div class="matriz-header">
             <h3>MATRIZ DE ADYACENCIA</h3>
@@ -74,26 +117,31 @@
                   <th class="corner-cell"></th>
                   <th v-for="nodo in nodos" :key="'col-'+nodo.id" class="col-header">
                     <div class="col-header-content">
-                      <span class="nodo-indicador"></span>
+                      <span class="nodo-indicador" :style="{ background: nodo.color }"></span>
                       {{ nodo.nombre || `N${nodo.id}` }}
                     </div>
                   </th>
-                  <th class="sum-col">Σ</th>
+                  <th class="sum-col">Σ PESOS</th>
+                  <th class="count-col"># CONEX</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="(fila, i) in matrizAdyacencia" :key="'fila-'+i">
                   <th class="row-header">
                     <div class="row-header-content">
-                      <span class="nodo-indicador"></span>
+                      <span class="nodo-indicador" :style="{ background: nodos[i].color }"></span>
                       {{ nodos[i].nombre || `N${nodos[i].id}` }}
                     </div>
                   </th>
                   <td v-for="(valor, j) in fila" :key="'celda-'+i+'-'+j" 
-                      :class="{ 'celda-con-valor': valor > 0 }">
+                      :class="{ 
+                        'celda-con-valor': valor > 0,
+                        'celda-convergencia': i !== j && matrizAdyacencia[j] && matrizAdyacencia[j][i] > 0 && valor > 0
+                      }">
                     <span class="celda-valor">{{ valor || '' }}</span>
                   </td>
                   <td class="sum-celda">{{ sumaFilas[i] }}</td>
+                  <td class="count-celda">{{ contarConexionesPorNodo(i) }}</td>
                 </tr>
                 <tr class="sum-row">
                   <th class="row-header sum-row-header">Σ</th>
@@ -102,6 +150,7 @@
                     {{ suma }}
                   </td>
                   <td class="total-celda">{{ sumaTotal }}</td>
+                  <td class="total-count-celda">{{ totalConexiones }}</td>
                 </tr>
               </tbody>
             </table>
@@ -115,6 +164,10 @@
               <span class="stat-dot" style="background: #f39c12;"></span>
               <span>Peso total: {{ sumaTotalPesos }}</span>
             </div>
+            <div class="matriz-stat">
+              <span class="stat-dot" style="background: #8e44ad;"></span>
+              <span>Convergencias: {{ calcularConvergencias }}</span>
+            </div>
           </div>
         </div>
         <div class="matriz-container matriz-vacia" v-else>
@@ -125,7 +178,6 @@
           </div>
         </div>
 
-        <!-- PIZARRA INTERACTIVA - NUEVO DISEÑO -->
         <div class="pizarra-container">
           <div class="pizarra-header">
             <div class="pizarra-tools">
@@ -137,71 +189,179 @@
                 <span class="tool-dot" style="background: #e67e22;"></span>
                 Modo Conexión
               </span>
+              <span class="tool-indicator">
+                <span class="tool-dot" :style="{ background: getTipoConexionColor }"></span>
+                {{ getTipoConexionNombre }}
+              </span>
+            </div>
+            
+            <div v-if="mostrarModalPeso" class="modal-peso-overlay" @click="cancelarPeso">
+              <div class="modal-peso-content" @click.stop>
+                <h3>INGRESAR PESO</h3>
+                <p>Define el peso de la conexión (1-10)</p>
+                <input 
+                  type="number" 
+                  ref="inputPeso"
+                  v-model.number="pesoTemporal" 
+                  min="1" 
+                  max="10"
+                  class="modal-input"
+                  @keyup.enter="confirmarPeso"
+                />
+                <div class="modal-buttons">
+                  <button @click="cancelarPeso" class="modal-btn cancelar">CANCELAR</button>
+                  <button @click="confirmarPeso" class="modal-btn confirmar">ACEPTAR</button>
+                </div>
+              </div>
             </div>
           </div>
+          
           <div 
             ref="pizarra"
             class="pizarra"
             @click="handlePizarraClick"
             @mousemove="handleMouseMove"
           >
-            <!-- Líneas de conexiones -->
             <svg class="conexiones-svg">
               <defs>
-                <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="16" refY="5" orient="auto">
-                  <polygon points="0 0, 10 5, 0 10" fill="#2c3e50" />
+                <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+                  <polygon points="0 0, 10 5, 0 10" fill="#2c3e50" stroke="white" stroke-width="0.8"/>
+                </marker>
+                <marker id="arrowhead-curve" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+                  <polygon points="0 0, 10 5, 0 10" fill="#2c3e50" stroke="white" stroke-width="0.8"/>
                 </marker>
               </defs>
+              
               <g v-for="(conexion, index) in conexiones" :key="index">
-                <line
-                  :x1="conexion.origen.x"
-                  :y1="conexion.origen.y"
-                  :x2="conexion.destino.x"
-                  :y2="conexion.destino.y"
-                  :stroke="conexion.color"
-                  stroke-width="3"
-                  :marker-end="'url(#arrowhead)'"
-                  class="conexion-line"
-                />
-                <!-- Círculo de fondo para el texto del peso -->
-                <circle
-                  :cx="(conexion.origen.x + conexion.destino.x) / 2"
-                  :cy="(conexion.origen.y + conexion.destino.y) / 2 - 15"
-                  r="14"
-                  fill="white"
-                  stroke="#2c3e50"
-                  stroke-width="2"
-                  class="peso-fondo"
-                />
-                <text
-                  :x="(conexion.origen.x + conexion.destino.x) / 2"
-                  :y="(conexion.origen.y + conexion.destino.y) / 2 - 15"
-                  class="conexion-peso"
-                >
-                  {{ conexion.weight }}
-                </text>
+                <template v-if="conexion.origen.id === conexion.destino.id">
+                  <path
+                    :d="calcularPathCiclo(conexion.origen)"
+                    :stroke="conexion.color"
+                    stroke-width="3"
+                    :stroke-dasharray="conexion.tipo === 'segmentada' || conexion.tipo === 'segmentada-no-dirigida' ? '8,4' : 'none'"
+                    fill="none"
+                    :marker-end="conexion.tipo === 'dirigida' || conexion.tipo === 'segmentada' ? 'url(#arrowhead-curve)' : ''"
+                    class="conexion-line"
+                  />
+                  <circle
+                    :cx="conexion.origen.x"
+                    :cy="conexion.origen.y - 65"
+                    r="14"
+                    fill="white"
+                    stroke="#2c3e50"
+                    stroke-width="2"
+                    class="peso-fondo"
+                  />
+                  <text
+                    :x="conexion.origen.x"
+                    :y="conexion.origen.y - 65"
+                    class="conexion-peso"
+                  >
+                    {{ conexion.weight }}
+                  </text>
+                </template>
+                
+                <template v-else-if="conexion.tipo === 'bidireccional-paralela'">
+                  <path
+                    :d="calcularPathParalelo(conexion.origen, conexion.destino, 12, 'ida')"
+                    :stroke="conexion.color"
+                    stroke-width="3"
+                    fill="none"
+                    marker-end="url(#arrowhead)"
+                    class="conexion-line"
+                  />
+                  <path
+                    :d="calcularPathParalelo(conexion.origen, conexion.destino, 12, 'vuelta')"
+                    :stroke="conexion.color"
+                    stroke-width="3"
+                    fill="none"
+                    marker-end="url(#arrowhead)"
+                    class="conexion-line"
+                  />
+                  
+                  <circle
+                    :cx="calcularPuntoMedioParalelo(conexion.origen, conexion.destino, 12).x"
+                    :cy="calcularPuntoMedioParalelo(conexion.origen, conexion.destino, 12).y"
+                    r="14"
+                    fill="white"
+                    stroke="#2c3e50"
+                    stroke-width="2"
+                    class="peso-fondo"
+                  />
+                  <text
+                    :x="calcularPuntoMedioParalelo(conexion.origen, conexion.destino, 12).x"
+                    :y="calcularPuntoMedioParalelo(conexion.origen, conexion.destino, 12).y"
+                    class="conexion-peso"
+                  >
+                    {{ conexion.weight }}
+                  </text>
+
+                  <circle
+                    :cx="calcularPuntoMedioParalelo(conexion.origen, conexion.destino, -12).x"
+                    :cy="calcularPuntoMedioParalelo(conexion.origen, conexion.destino, -12).y"
+                    r="14"
+                    fill="white"
+                    stroke="#2c3e50"
+                    stroke-width="2"
+                    class="peso-fondo"
+                  />
+                  <text
+                    :x="calcularPuntoMedioParalelo(conexion.origen, conexion.destino, -12).x"
+                    :y="calcularPuntoMedioParalelo(conexion.origen, conexion.destino, -12).y"
+                    class="conexion-peso"
+                  >
+                    {{ conexion.weight }}
+                  </text>
+                </template>
+                
+                <template v-else>
+                  <path
+                    :d="calcularPathNormal(conexion.origen, conexion.destino)"
+                    :stroke="conexion.color"
+                    stroke-width="3"
+                    :stroke-dasharray="conexion.tipo === 'segmentada' || conexion.tipo === 'segmentada-no-dirigida' ? '8,4' : 'none'"
+                    fill="none"
+                    :marker-end="conexion.tipo === 'dirigida' || conexion.tipo === 'segmentada' ? 'url(#arrowhead)' : ''"
+                    class="conexion-line"
+                  />
+                  
+                  <circle
+                    :cx="(conexion.origen.x + conexion.destino.x) / 2"
+                    :cy="(conexion.origen.y + conexion.destino.y) / 2 - 15"
+                    r="14"
+                    fill="white"
+                    stroke="#2c3e50"
+                    stroke-width="2"
+                    class="peso-fondo"
+                  />
+                  <text
+                    :x="(conexion.origen.x + conexion.destino.x) / 2"
+                    :y="(conexion.origen.y + conexion.destino.y) / 2 - 15"
+                    class="conexion-peso"
+                  >
+                    {{ conexion.weight }}
+                  </text>
+                </template>
               </g>
               
-              <!-- Línea temporal para nueva conexión -->
               <line
                 v-if="modo === 'conexion' && nodoSeleccionado && mousePos.x && mousePos.y"
-                :x1="nodoSeleccionado.x"
-                :y1="nodoSeleccionado.y"
+                :x1="calcularPuntoEnBorde(nodoSeleccionado, mousePos).x"
+                :y1="calcularPuntoEnBorde(nodoSeleccionado, mousePos).y"
                 :x2="mousePos.x"
                 :y2="mousePos.y"
-                stroke="#e67e22"
+                :stroke="getTipoConexionColor"
                 stroke-width="3"
-                stroke-dasharray="6,6"
-                :marker-end="'url(#arrowhead)'"
+                :stroke-dasharray="tipoConexion === 'segmentada' || tipoConexion === 'segmentada-no-dirigida' ? '8,4' : 'none'"
+                :marker-end="tipoConexion === 'dirigida' || tipoConexion === 'segmentada' ? 'url(#arrowhead)' : ''"
               />
             </svg>
 
-            <!-- Nodos -->
             <div
               v-for="(nodo, index) in nodos"
               :key="index"
               class="nodo"
-              :style="{ left: nodo.x + 'px', top: nodo.y + 'px' }"
+              :style="{ left: nodo.x + 'px', top: nodo.y + 'px', background: nodo.color, borderColor: nodo.color }"
               @click.stop="handleNodoClick(nodo, $event)"
               :class="{ 
                 seleccionado: nodoSeleccionado === nodo,
@@ -213,7 +373,6 @@
               </div>
             </div>
 
-            <!-- Instrucciones -->
             <div class="instrucciones" v-if="nodos.length === 0">
               <div class="instrucciones-content">
                 <span class="instrucciones-icon">⌾</span>
@@ -224,7 +383,6 @@
         </div>
       </div>
 
-      <!-- TABLA DE EDICIÓN DE CONEXIONES - NUEVO DISEÑO -->
       <div class="tabla-edicion" v-if="nodos.length > 0">
         <div class="tabla-header">
           <h3>CONEXIONES</h3>
@@ -238,6 +396,7 @@
                 <th>DESTINO</th>
                 <th>PESO</th>
                 <th>COLOR</th>
+                <th>TIPO</th>
                 <th></th>
               </tr>
             </thead>
@@ -269,14 +428,22 @@
                   </div>
                 </td>
                 <td>
-                  <button @click="eliminarConexion(index)" class="btn-delete" title="Eliminar conexión">×</button>
+                  <select v-model="conexion.tipo" class="select-tipo" @change="actualizarConexion(index)">
+                    <option value="dirigida">Dirigida</option>
+                    <option value="no-dirigida">No Dirigida</option>
+                    <option value="bidireccional-paralela">Bidireccional Paralela</option>
+                    <option value="segmentada">Segmentada (con dirección)</option>
+                    <option value="segmentada-no-dirigida">Segmentada (sin dirección)</option>
+                  </select>
+                </td>
+                <td>
+                  <button @click="eliminarConexion(index)" class="btn-delete">×</button>
                 </td>
               </tr>
               <tr v-if="conexiones.length === 0">
-                <td colspan="5" class="text-center empty-state">
+                <td colspan="6" class="text-center empty-state">
                   <span class="empty-icon">⇢</span>
                   <p>NO HAY CONEXIONES</p>
-                  <span class="empty-hint">USA EL MODO CONEXIÓN PARA CREAR</span>
                 </td>
               </tr>
             </tbody>
@@ -284,7 +451,6 @@
         </div>
       </div>
 
-      <!-- TABLA DE NODOS - NUEVO DISEÑO -->
       <div class="tabla-nodos" v-if="nodos.length > 0">
         <div class="tabla-header">
           <h3>NODOS</h3>
@@ -296,13 +462,14 @@
               <tr>
                 <th>ID</th>
                 <th>NOMBRE</th>
+                <th>COLOR</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="(nodo, index) in nodos" :key="index">
                 <td>
-                  <div class="nodo-id-badge">{{ nodo.id }}</div>
+                  <div class="nodo-id-badge" :style="{ background: nodo.color }">{{ nodo.id }}</div>
                 </td>
                 <td>
                   <input 
@@ -314,7 +481,16 @@
                   />
                 </td>
                 <td>
-                  <button @click="eliminarNodo(index)" class="btn-delete" title="Eliminar nodo">×</button>
+                  <div class="color-picker-wrapper">
+                    <input 
+                      type="color" 
+                      v-model="nodo.color"
+                      @change="actualizarNodo"
+                    />
+                  </div>
+                </td>
+                <td>
+                  <button @click="eliminarNodo(index)" class="btn-delete">×</button>
                 </td>
               </tr>
             </tbody>
@@ -327,33 +503,219 @@
       <p>Análisis de Algoritmos - Primer Semestre 2026</p>
     </footer>
 
+    <input 
+      type="file" 
+      ref="fileInput" 
+      style="display: none" 
+      accept=".json"
+      @change="handleFileImport"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, nextTick } from 'vue'
 
-// Estado de la aplicación
+// Estado
 const nodos = ref([])
 const conexiones = ref([])
 const modo = ref('nodo')
+const tipoConexion = ref('dirigida')
 const nodoSeleccionado = ref(null)
 const mousePos = ref({ x: null, y: null })
 const pizarra = ref(null)
+const fileInput = ref(null)
+const mostrarModalPeso = ref(false)
+const pesoTemporal = ref(3)
+const conexionPendiente = ref(null)
+const inputPeso = ref(null)
 
-// Contador para IDs de nodos
 let nextId = 1
 
-// Colores más fuertes y oscuros
-const colores = {
-  rojoOscuro: '#c0392b',
-  azulOscuro: '#2980b9',
-  verdeOscuro: '#27ae60',
-  naranjaOscuro: '#d35400',
-  purpuraOscuro: '#8e44ad'
+// Colores
+const coloresNodo = [
+  '#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6', 
+  '#1abc9c', '#e67e22', '#34495e', '#16a085', '#c0392b'
+]
+
+// NUEVA FUNCIÓN: Calcular punto en el borde del nodo para la línea temporal
+const calcularPuntoEnBorde = (nodo, mousePos) => {
+  const dx = mousePos.x - nodo.x
+  const dy = mousePos.y - nodo.y
+  const distancia = Math.sqrt(dx * dx + dy * dy)
+  
+  if (distancia === 0) return { x: nodo.x, y: nodo.y }
+  
+  const radio = 24 // Mismo radio que el nodo
+  return {
+    x: nodo.x + (dx / distancia) * radio,
+    y: nodo.y + (dy / distancia) * radio
+  }
 }
 
-// Computed para la matriz de adyacencia
+// MEJORADA: Calcular path normal con puntos en el BORDE del nodo
+const calcularPathNormal = (origen, destino) => {
+  const dx = destino.x - origen.x
+  const dy = destino.y - origen.y
+  const distancia = Math.sqrt(dx * dx + dy * dy)
+  
+  if (distancia === 0) return `M ${origen.x} ${origen.y} L ${destino.x} ${destino.y}`
+  
+  const radio = 24
+  const angulo = Math.atan2(dy, dx)
+  
+  // Punto de inicio en el BORDE del nodo origen
+  const inicioX = origen.x + Math.cos(angulo) * radio
+  const inicioY = origen.y + Math.sin(angulo) * radio
+  
+  // Punto de fin en el BORDE del nodo destino
+  const finX = destino.x - Math.cos(angulo) * radio
+  const finY = destino.y - Math.sin(angulo) * radio
+  
+  return `M ${inicioX} ${inicioY} L ${finX} ${finY}`
+}
+
+// MEJORADA: Path de ciclo (Bucle) más abierto y que conecta exactamente al borde
+const calcularPathCiclo = (nodo) => {
+  const x = nodo.x
+  const y = nodo.y
+  const radio = 24
+  
+  // Ángulos exactos para salir y entrar por el borde superior (135 y 45 grados)
+  const anguloInicio = -Math.PI * 0.75
+  const anguloFin = -Math.PI * 0.25
+  
+  const startX = x + Math.cos(anguloInicio) * radio
+  const startY = y + Math.sin(anguloInicio) * radio
+  
+  const endX = x + Math.cos(anguloFin) * radio
+  const endY = y + Math.sin(anguloFin) * radio
+  
+  // Puntos de control para que se abra bien como una gota
+  const cp1X = x - 50
+  const cp1Y = y - 80
+  const cp2X = x + 50
+  const cp2Y = y - 80
+  
+  return `M ${startX} ${startY} C ${cp1X} ${cp1Y}, ${cp2X} ${cp2Y}, ${endX} ${endY}`
+}
+
+// MEJORADA: Path paralelo con líneas rectas exactas
+const calcularPathParalelo = (origen, destino, offset, direccion) => {
+  const dx = destino.x - origen.x
+  const dy = destino.y - origen.y
+  const distancia = Math.sqrt(dx * dx + dy * dy)
+  
+  if (distancia === 0) return `M ${origen.x} ${origen.y} L ${destino.x} ${destino.y}`
+  
+  const radio = 24
+  
+  if (direccion === 'ida') {
+    const perpX = -dy / distancia
+    const perpY = dx / distancia
+    const angulo = Math.atan2(dy, dx)
+    
+    // Calculamos el punto exacto en el borde
+    const bordeX1 = origen.x + Math.cos(angulo) * radio
+    const bordeY1 = origen.y + Math.sin(angulo) * radio
+    const bordeX2 = destino.x - Math.cos(angulo) * radio
+    const bordeY2 = destino.y - Math.sin(angulo) * radio
+    
+    // Le sumamos el offset perpendicular
+    const inicioX = bordeX1 + perpX * offset
+    const inicioY = bordeY1 + perpY * offset
+    const finX = bordeX2 + perpX * offset
+    const finY = bordeY2 + perpY * offset
+    
+    return `M ${inicioX} ${inicioY} L ${finX} ${finY}`
+  } else {
+    // Para la vuelta, se calcula invirtiendo origen y destino para que la flecha quede bien
+    const dxInv = origen.x - destino.x
+    const dyInv = origen.y - destino.y
+    const perpXInv = -dyInv / distancia
+    const perpYInv = dxInv / distancia
+    const anguloInv = Math.atan2(dyInv, dxInv)
+    
+    const bordeX1 = destino.x + Math.cos(anguloInv) * radio
+    const bordeY1 = destino.y + Math.sin(anguloInv) * radio
+    const bordeX2 = origen.x - Math.cos(anguloInv) * radio
+    const bordeY2 = origen.y - Math.sin(anguloInv) * radio
+    
+    const inicioX = bordeX1 + perpXInv * offset
+    const inicioY = bordeY1 + perpYInv * offset
+    const finX = bordeX2 + perpXInv * offset
+    const finY = bordeY2 + perpYInv * offset
+    
+    return `M ${inicioX} ${inicioY} L ${finX} ${finY}`
+  }
+}
+
+// MEJORADA: Punto medio paralelo exacto
+const calcularPuntoMedioParalelo = (origen, destino, offset) => {
+  const midX = (origen.x + destino.x) / 2
+  const midY = (origen.y + destino.y) / 2
+  
+  const dx = destino.x - origen.x
+  const dy = destino.y - origen.y
+  const distancia = Math.sqrt(dx * dx + dy * dy)
+  
+  if (distancia === 0) return { x: midX, y: midY }
+  
+  const perpX = -dy / distancia
+  const perpY = dx / distancia
+  
+  return {
+    x: midX + perpX * offset,
+    y: midY + perpY * offset
+  }
+}
+
+// Computed para color del tipo de conexión
+const getTipoConexionColor = computed(() => {
+  switch(tipoConexion.value) {
+    case 'dirigida': return '#3498db'
+    case 'no-dirigida': return '#2ecc71'
+    case 'bidireccional-paralela': return '#e74c3c'
+    case 'segmentada': return '#f39c12'
+    case 'segmentada-no-dirigida': return '#95a5a6'
+    default: return '#3498db'
+  }
+})
+
+// Computed para nombre del tipo
+const getTipoConexionNombre = computed(() => {
+  switch(tipoConexion.value) {
+    case 'dirigida': return 'Dirigida'
+    case 'no-dirigida': return 'No Dirigida'
+    case 'bidireccional-paralela': return 'Bidireccional'
+    case 'segmentada': return 'Segmentada'
+    case 'segmentada-no-dirigida': return 'Segmentada S/D'
+    default: return 'Dirigida'
+  }
+})
+
+// Calcular convergencias
+const calcularConvergencias = computed(() => {
+  let convergencias = 0
+  const n = nodos.value.length
+  
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      if (i !== j) {
+        const hayIda = matrizAdyacencia.value[i]?.[j] > 0
+        const hayVuelta = matrizAdyacencia.value[j]?.[i] > 0
+        
+        if (hayIda && hayVuelta) {
+          convergencias++
+        }
+      }
+    }
+  }
+  
+  return convergencias / 2
+})
+
+// Matriz de adyacencia
 const matrizAdyacencia = computed(() => {
   const n = nodos.value.length
   const matriz = Array(n).fill().map(() => Array(n).fill(0))
@@ -361,8 +723,13 @@ const matrizAdyacencia = computed(() => {
   conexiones.value.forEach(conexion => {
     const origenIndex = nodos.value.findIndex(n => n.id === conexion.origen.id)
     const destinoIndex = nodos.value.findIndex(n => n.id === conexion.destino.id)
+    
     if (origenIndex !== -1 && destinoIndex !== -1) {
       matriz[origenIndex][destinoIndex] = conexion.weight
+      
+      if (conexion.tipo === 'no-dirigida' || conexion.tipo === 'segmentada-no-dirigida') {
+        matriz[destinoIndex][origenIndex] = conexion.weight
+      }
     }
   })
   
@@ -385,41 +752,55 @@ const sumaColumnas = computed(() => {
   )
 })
 
-// Suma total de la matriz
+// Suma total
 const sumaTotal = computed(() => {
   return sumaFilas.value.reduce((sum, val) => sum + val, 0)
 })
 
-// Suma total de pesos
 const sumaTotalPesos = computed(() => sumaTotal.value)
 
-// Obtener nombre del nodo para mostrar
+// Contar conexiones por nodo
+const contarConexionesPorNodo = (indiceNodo) => {
+  return matrizAdyacencia.value[indiceNodo].filter(valor => valor > 0).length
+}
+
+// Total de conexiones
+const totalConexiones = computed(() => {
+  let total = 0
+  for (let i = 0; i < nodos.value.length; i++) {
+    total += contarConexionesPorNodo(i)
+  }
+  return total
+})
+
+// Obtener nombre del nodo
 const obtenerNombreNodo = (nodo) => {
   return nodo.nombre || `N${nodo.id}`
 }
 
-// Manejar clic en la pizarra
+// Crear nodo
+const crearNodo = (x, y) => {
+  const colorIndex = (nextId - 1) % coloresNodo.length
+  nodos.value.push({
+    id: nextId++,
+    nombre: '',
+    x,
+    y,
+    color: coloresNodo[colorIndex]
+  })
+}
+
+// Manejar clic en pizarra
 const handlePizarraClick = (event) => {
   if (modo.value === 'nodo') {
     const rect = event.currentTarget.getBoundingClientRect()
     const x = event.clientX - rect.left
     const y = event.clientY - rect.top
-    
     crearNodo(x, y)
   }
 }
 
-// Crear un nuevo nodo
-const crearNodo = (x, y) => {
-  nodos.value.push({
-    id: nextId++,
-    nombre: '',
-    x,
-    y
-  })
-}
-
-// Manejar clic en un nodo
+// Manejar clic en nodo
 const handleNodoClick = (nodo, event) => {
   event.stopPropagation()
   
@@ -427,27 +808,86 @@ const handleNodoClick = (nodo, event) => {
     if (!nodoSeleccionado.value) {
       nodoSeleccionado.value = nodo
     } else {
-      // Permitir conexión al mismo nodo (ciclo)
-      crearConexion(nodoSeleccionado.value, nodo)
-      nodoSeleccionado.value = null
+      // Guardar la conexión pendiente y mostrar modal
+      conexionPendiente.value = {
+        origen: nodoSeleccionado.value,
+        destino: nodo
+      }
+      pesoTemporal.value = 3
+      mostrarModalPeso.value = true
+      
+      // Enfocar el input después de que se renderice el modal
+      nextTick(() => {
+        if (inputPeso.value) {
+          inputPeso.value.focus()
+        }
+      })
     }
   }
 }
 
-// Crear una nueva conexión
-const crearConexion = (origen, destino) => {
-  const existe = conexiones.value.some(
-    c => c.origen.id === origen.id && c.destino.id === destino.id
+// Confirmar peso
+const confirmarPeso = () => {
+  if (pesoTemporal.value >= 1 && pesoTemporal.value <= 10) {
+    if (conexionPendiente.value) {
+      crearConexion(
+        conexionPendiente.value.origen, 
+        conexionPendiente.value.destino, 
+        pesoTemporal.value
+      )
+    }
+    cerrarModal()
+  } else {
+    alert('El peso debe estar entre 1 y 10')
+  }
+}
+
+// Cancelar peso
+const cancelarPeso = () => {
+  cerrarModal()
+}
+
+// Cerrar modal y limpiar estado
+const cerrarModal = () => {
+  mostrarModalPeso.value = false
+  conexionPendiente.value = null
+  nodoSeleccionado.value = null
+  pesoTemporal.value = 3
+}
+
+// Crear conexión
+const crearConexion = (origen, destino, peso) => {
+  // Verificar si ya existe
+  const existeSimilar = conexiones.value.some(c => 
+    c.origen.id === origen.id && c.destino.id === destino.id
   )
   
-  if (!existe) {
-    conexiones.value.push({
-      origen,
-      destino,
-      weight: 3,
-      color: colores.azulOscuro
-    })
+  if (tipoConexion.value !== 'bidireccional-paralela' && existeSimilar) {
+    alert('Ya existe una conexión similar')
+    return
   }
+  
+  // Verificar para no dirigidas
+  if (tipoConexion.value === 'no-dirigida' || tipoConexion.value === 'segmentada-no-dirigida') {
+    const existeEnAmbas = conexiones.value.some(c => 
+      (c.origen.id === origen.id && c.destino.id === destino.id) ||
+      (c.origen.id === destino.id && c.destino.id === origen.id)
+    )
+    
+    if (existeEnAmbas) {
+      alert('Ya existe una conexión no dirigida entre estos nodos')
+      return
+    }
+  }
+  
+  // Crear la conexión
+  conexiones.value.push({
+    origen,
+    destino,
+    weight: peso,
+    color: getTipoConexionColor.value,
+    tipo: tipoConexion.value
+  })
 }
 
 // Manejar movimiento del mouse
@@ -461,42 +901,39 @@ const handleMouseMove = (event) => {
   }
 }
 
-// Actualizar una conexión
+// Actualizar conexión
 const actualizarConexion = (index) => {
   conexiones.value = [...conexiones.value]
 }
 
-// Eliminar una conexión
+// Eliminar conexión
 const eliminarConexion = (index) => {
   conexiones.value.splice(index, 1)
 }
 
-// Eliminar un nodo y sus conexiones
+// Eliminar nodo
 const eliminarNodo = (index) => {
   const nodoEliminado = nodos.value[index]
   
-  // Eliminar conexiones asociadas
   conexiones.value = conexiones.value.filter(c => 
     c.origen.id !== nodoEliminado.id && c.destino.id !== nodoEliminado.id
   )
   
-  // Eliminar el nodo
   nodos.value.splice(index, 1)
   
-  // Si el nodo seleccionado fue eliminado, limpiar selección
-  if (nodoSeleccionado.value && nodoSeleccionado.value.id === nodoEliminado.id) {
+  if (nodoSeleccionado.value?.id === nodoEliminado.id) {
     nodoSeleccionado.value = null
   }
 }
 
-// Actualizar nodos (forzar reactividad)
+// Actualizar nodo
 const actualizarNodo = () => {
   nodos.value = [...nodos.value]
 }
 
-// Limpiar toda la pizarra
+// Limpiar pizarra
 const limpiarPizarra = () => {
-  if (confirm('¿ESTÁS SEGURO DE LIMPIAR TODA LA PIZARRA?')) {
+  if (confirm('¿ESTÁS SEGURO?')) {
     nodos.value = []
     conexiones.value = []
     nodoSeleccionado.value = null
@@ -504,9 +941,72 @@ const limpiarPizarra = () => {
   }
 }
 
-onMounted(() => {
-  window.addEventListener('resize', () => {})
-})
+// Exportar diseño
+const exportarDiseño = () => {
+  const diseño = {
+    nodos: nodos.value,
+    conexiones: conexiones.value.map(c => ({
+      origenId: c.origen.id,
+      destinoId: c.destino.id,
+      weight: c.weight,
+      color: c.color,
+      tipo: c.tipo
+    })),
+    nextId
+  }
+  
+  const dataStr = JSON.stringify(diseño, null, 2)
+  const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr)
+  const fileName = `diseño-${new Date().toISOString().slice(0,10)}.json`
+  
+  const link = document.createElement('a')
+  link.href = dataUri
+  link.download = fileName
+  link.click()
+}
+
+// Importar diseño
+const importarDiseño = () => {
+  fileInput.value.click()
+}
+
+// Manejar importación
+const handleFileImport = (event) => {
+  const file = event.target.files[0]
+  if (!file) return
+  
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    try {
+      const diseño = JSON.parse(e.target.result)
+      
+      nodos.value = diseño.nodos
+      
+      // Restaurar referencias
+      conexiones.value = diseño.conexiones.map(c => {
+        const origen = nodos.value.find(n => n.id === c.origenId)
+        const destino = nodos.value.find(n => n.id === c.destinoId)
+        return {
+          origen,
+          destino,
+          weight: c.weight,
+          color: c.color,
+          tipo: c.tipo
+        }
+      })
+      
+      nextId = diseño.nextId
+      alert('Diseño importado correctamente')
+    } catch (error) {
+      alert('Error al importar')
+      console.error(error)
+    }
+  }
+  reader.readAsText(file)
+  event.target.value = ''
+}
+
+onMounted(() => {})
 </script>
 
 <style scoped>
@@ -518,7 +1018,6 @@ onMounted(() => {
   flex-direction: column;
 }
 
-/* NAVBAR - SIN CAMBIOS (IGUAL QUE EN INICIO) */
 .navbar {
   background: #2c3e50;
   padding: 1rem 5%;
@@ -567,14 +1066,12 @@ onMounted(() => {
   color: #3498db;
 }
 
-/* MAIN CONTENT */
 .nodos-main {
   margin-top: 80px;
   padding: 20px;
   flex: 1;
 }
 
-/* PANEL DE CONTROL - NUEVO DISEÑO */
 .control-panel {
   background: white;
   border-radius: 16px;
@@ -605,6 +1102,7 @@ onMounted(() => {
 .button-group {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .btn-mode {
@@ -630,6 +1128,12 @@ onMounted(() => {
   border-color: #bdc3c7;
 }
 
+.btn-tipo.active {
+  background: #e67e22;
+  border-color: #e67e22;
+  color: white;
+}
+
 .btn-action {
   padding: 8px 16px;
   border: 1px solid #e0e7e9;
@@ -640,6 +1144,28 @@ onMounted(() => {
   background: white;
   color: #2c3e50;
   transition: all 0.2s ease;
+}
+
+.btn-export {
+  color: #27ae60;
+  border-color: #a3e4d7;
+}
+
+.btn-export:hover {
+  background: #27ae60;
+  border-color: #27ae60;
+  color: white;
+}
+
+.btn-import {
+  color: #3498db;
+  border-color: #a9cce3;
+}
+
+.btn-import:hover {
+  background: #3498db;
+  border-color: #3498db;
+  color: white;
 }
 
 .btn-danger {
@@ -688,20 +1214,18 @@ onMounted(() => {
   background: #e0e7e9;
 }
 
-/* CONTENEDOR PRINCIPAL CON MATRIZ Y PIZARRA */
 .contenedor-principal {
   display: flex;
   gap: 24px;
   margin-bottom: 24px;
 }
 
-/* MATRIZ DE ADYACENCIA - NUEVO DISEÑO */
 .matriz-container {
   background: white;
   border-radius: 16px;
   padding: 20px;
   border: 1px solid #e0e7e9;
-  flex: 0 0 300px;
+  flex: 0 0 350px;
   display: flex;
   flex-direction: column;
   box-shadow: 0 4px 12px rgba(0,0,0,0.03);
@@ -774,7 +1298,7 @@ onMounted(() => {
 }
 
 .matriz-tabla th, .matriz-tabla td {
-  padding: 10px 6px;
+  padding: 8px 4px;
   border: 1px solid #e0e7e9;
 }
 
@@ -787,7 +1311,7 @@ onMounted(() => {
   background: #f8f9fa;
   color: #2c3e50;
   font-weight: 600;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
 }
 
 .col-header-content, .row-header-content {
@@ -800,7 +1324,6 @@ onMounted(() => {
 .nodo-indicador {
   width: 8px;
   height: 8px;
-  background: #3498db;
   border-radius: 50%;
   display: inline-block;
 }
@@ -809,7 +1332,7 @@ onMounted(() => {
   background: #f8f9fa;
   color: #2c3e50;
   font-weight: 600;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   text-align: right;
 }
 
@@ -828,17 +1351,38 @@ onMounted(() => {
   font-weight: 600;
 }
 
+.matriz-tabla .celda-convergencia {
+  background: #8e44ad30;
+  position: relative;
+}
+
+.matriz-tabla .celda-convergencia::after {
+  content: "⇄";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 0.6rem;
+  color: #8e44ad;
+}
+
 .matriz-tabla .celda-con-valor .celda-valor {
   background: #3498db;
   color: white;
-  padding: 4px 8px;
-  border-radius: 12px;
+  padding: 2px 6px;
+  border-radius: 10px;
   display: inline-block;
-  min-width: 20px;
+  min-width: 18px;
+  font-size: 0.75rem;
 }
 
 .matriz-tabla .sum-col, .matriz-tabla .sum-celda {
   background: #f39c1220;
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+.matriz-tabla .count-col, .matriz-tabla .count-celda {
+  background: #27ae6020;
   color: #2c3e50;
   font-weight: 600;
 }
@@ -854,11 +1398,18 @@ onMounted(() => {
   font-weight: 600;
 }
 
+.matriz-tabla .total-count-celda {
+  background: #27ae60;
+  color: white;
+  font-weight: 600;
+}
+
 .matriz-footer {
   display: flex;
   gap: 16px;
   border-top: 1px solid #e0e7e9;
   padding-top: 12px;
+  flex-wrap: wrap;
 }
 
 .matriz-stat {
@@ -876,7 +1427,6 @@ onMounted(() => {
   display: inline-block;
 }
 
-/* PIZARRA - NUEVO DISEÑO */
 .pizarra-container {
   background: white;
   border-radius: 16px;
@@ -885,17 +1435,20 @@ onMounted(() => {
   min-width: 0;
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+  position: relative;
 }
 
 .pizarra-header {
   padding: 12px 16px;
   border-bottom: 1px solid #e0e7e9;
   background: #f8f9fa;
+  position: relative;
 }
 
 .pizarra-tools {
   display: flex;
   gap: 16px;
+  flex-wrap: wrap;
 }
 
 .tool-indicator {
@@ -916,6 +1469,91 @@ onMounted(() => {
   height: 10px;
   border-radius: 50%;
   display: inline-block;
+}
+
+.modal-peso-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.modal-peso-content {
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  min-width: 300px;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
+.modal-peso-content h3 {
+  margin: 0 0 8px 0;
+  color: #2c3e50;
+  font-size: 1.1rem;
+}
+
+.modal-peso-content p {
+  color: #7f8c8d;
+  font-size: 0.9rem;
+  margin: 0 0 16px 0;
+}
+
+.modal-input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #e0e7e9;
+  border-radius: 8px;
+  font-size: 1rem;
+  text-align: center;
+  margin-bottom: 20px;
+  box-sizing: border-box;
+}
+
+.modal-input:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52,152,219,0.1);
+}
+
+.modal-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.modal-btn {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.modal-btn.cancelar {
+  background: #ecf0f1;
+  color: #7f8c8d;
+}
+
+.modal-btn.cancelar:hover {
+  background: #bdc3c7;
+  color: #2c3e50;
+}
+
+.modal-btn.confirmar {
+  background: #3498db;
+  color: white;
+}
+
+.modal-btn.confirmar:hover {
+  background: #2980b9;
 }
 
 .pizarra {
@@ -950,7 +1588,7 @@ onMounted(() => {
 }
 
 .conexion-peso {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   fill: #2c3e50;
   text-anchor: middle;
@@ -968,7 +1606,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #2c3e50;
+  color: white;
   font-weight: 600;
   font-size: 0.9rem;
   cursor: pointer;
@@ -981,20 +1619,15 @@ onMounted(() => {
 .nodo:hover {
   transform: translate(-50%, -50%) scale(1.1);
   box-shadow: 0 8px 16px rgba(0,0,0,0.1);
-  border-color: #2c3e50;
-  background: #f8f9fa;
+  filter: brightness(1.1);
 }
 
 .nodo.seleccionado {
-  background: #c0392b;
-  border-color: #c0392b;
-  color: white;
+  filter: brightness(0.8);
+  box-shadow: 0 0 0 4px rgba(0,0,0,0.2);
 }
 
 .nodo.destino {
-  background: #27ae60;
-  border-color: #27ae60;
-  color: white;
   animation: pulse 1.5s infinite;
 }
 
@@ -1045,7 +1678,6 @@ onMounted(() => {
   letter-spacing: 0.5px;
 }
 
-/* TABLAS DE EDICIÓN - NUEVO DISEÑO */
 .tabla-edicion,
 .tabla-nodos {
   background: white;
@@ -1124,8 +1756,6 @@ tr:last-child td {
 }
 
 .nodo-id-badge {
-  background: #2c3e50;
-  color: white;
   width: 32px;
   height: 32px;
   display: flex;
@@ -1134,6 +1764,7 @@ tr:last-child td {
   border-radius: 50%;
   font-weight: 600;
   font-size: 0.8rem;
+  color: white;
 }
 
 .input-peso {
@@ -1155,9 +1786,20 @@ tr:last-child td {
   font-size: 0.85rem;
 }
 
-.input-nombre:focus {
+.input-nombre:focus,
+.input-peso:focus {
   outline: none;
   border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52,152,219,0.1);
+}
+
+.select-tipo {
+  padding: 6px 8px;
+  border: 1px solid #e0e7e9;
+  border-radius: 8px;
+  background: white;
+  font-size: 0.8rem;
+  color: #2c3e50;
 }
 
 .color-picker-wrapper {
@@ -1212,15 +1854,9 @@ input[type="color"] {
 .empty-state p {
   color: #2c3e50;
   font-weight: 500;
-  margin: 0 0 4px 0;
+  margin: 0;
 }
 
-.empty-hint {
-  color: #95a5a6;
-  font-size: 0.75rem;
-}
-
-/* FOOTER - SIN CAMBIOS */
 footer {
   background: #2c3e50;
   padding: 10px 0;
@@ -1237,7 +1873,6 @@ footer p {
   margin: 0;
 }
 
-/* RESPONSIVE */
 @media (max-width: 1100px) {
   .contenedor-principal {
     flex-direction: column;
@@ -1304,6 +1939,11 @@ footer p {
   
   .btn-mode, .btn-action {
     flex: 1;
+  }
+  
+  .modal-peso-content {
+    min-width: 260px;
+    padding: 20px;
   }
 }
 </style>
