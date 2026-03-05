@@ -1,7 +1,6 @@
 <template>
   <div class="inicio-container">
 
-    <!-- NAVBAR CON DROPDOWN -->
     <nav class="navbar">
       <div class="nav-content">
         <div class="logo">
@@ -13,11 +12,11 @@
           <li class="dropdown">
             <router-link to="/algoritmos" class="dropbtn">ALGORITMOS</router-link>
             <div class="dropdown-content">
-              <a href="/algoritmos#algoritmo">¿Qué es?</a>
-              <a href="/algoritmos#utilizan">¿Para qué se utilizan?</a>
-              <a href="/algoritmos#tipos">Tipos</a>
-              <a href="/algoritmos#abeliano">Abeliano</a>
-              <a href="/algoritmos#videos">Videos</a>
+              <router-link :to="{ path: '/algoritmos', hash: '#algoritmo' }">¿Qué es?</router-link>
+              <router-link :to="{ path: '/algoritmos', hash: '#utilizan' }">¿Para qué se utilizan?</router-link>
+              <router-link :to="{ path: '/algoritmos', hash: '#tipos' }">Tipos</router-link>
+              <router-link :to="{ path: '/algoritmos', hash: '#abeliano' }">Abeliano</router-link>
+              <router-link :to="{ path: '/algoritmos', hash: '#videos' }">Videos</router-link>
             </div>
           </li>
           <li><router-link to="/nodos">NODOS</router-link></li>
@@ -25,7 +24,6 @@
       </div>
     </nav>
 
-    <!-- HERO CENTRADO -->
     <section class="hero">
       <div class="hero-content">
         <div class="hero-center">
@@ -42,7 +40,6 @@
       </div>
     </section>
 
-    <!-- FOOTER -->
     <footer>
       <p>Análisis de Algoritmos - Primer Semestre 2026</p>
     </footer>
@@ -51,7 +48,6 @@
 </template>
 
 <script setup>
-// Eliminamos el manejo de overflow del body, ya no es necesario
 </script>
 
 <style scoped>
@@ -59,10 +55,9 @@
 .inicio-container {
   font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   background-color: #f4f4f4;
-  min-height: 100vh; /* Cambiado de height a min-height */
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  /* Eliminado overflow: hidden */
 }
 
 /* NAVBAR */
@@ -156,7 +151,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 80px 8% 20px 8%; /* Añadido un poco de padding inferior */
+  padding: 80px 8% 20px 8%; 
   margin-top: 0;
 }
 
